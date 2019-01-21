@@ -1,5 +1,6 @@
 package com.alexa.lambda.townhall.handler;
 
+import com.alexa.lambda.townhall.LambdaConstants;
 import com.amazon.ask.dispatcher.request.handler.HandlerInput;
 import com.amazon.ask.dispatcher.request.handler.RequestHandler;
 import com.amazon.ask.model.IntentRequest;
@@ -7,12 +8,13 @@ import com.amazon.ask.model.Response;
 import com.amazon.ask.model.Slot;
 import com.amazon.ask.request.Predicates;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Optional;
 
 public class ConfirmAccountNumberIntentHandler implements RequestHandler {
@@ -81,14 +83,51 @@ public class ConfirmAccountNumberIntentHandler implements RequestHandler {
     private String getAccountBalance(String accountNumber) {
         String balance = "0.00";
         try {
-            URL url = new URL("http://localhost:8080/mindtuit/execute?command="+accountNumber);
+            URL url = new URL(LambdaConstants.url);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
+            conn.setRequestMethod(LambdaConstants.METHOD);
             conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("apikey",LambdaConstants.apiKey);
+            conn.setRequestProperty("apisecret",LambdaConstants.apiSecret);
+            conn.setRequestProperty("requestUID",generateRqUID());
+            conn.setRequestProperty("requestUID","TEST");
+            conn.setRequestProperty("resourceOwnerID","TEST");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+
+
+            OutputStream os = conn.getOutputStream();
+            OutputStreamWriter osw = new OutputStreamWriter(os, "UTF-8");
+            osw.write("{" +
+                    "\"accountNumber\": \""+ accountNumber +"\"," +
+                    "\"accountCurrency\": \"true\"," +
+                    "\"includeBalance\": \"true\"," +
+                    "\"includeExtBalance\": \"true\"," +
+                    "\"includeInterest\": \"true\"" +
+                    "}");
+            osw.flush();
+            osw.close();
+            os.close();  //don't forget to close the OutputStream
+            conn.connect();
+
+            //read the inputstream and print it
+            String result;
+            BufferedInputStream bis = new BufferedInputStream(conn.getInputStream());
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            int result2 = bis.read();
+            while(result2 != -1) {
+                buf.write((byte) result2);
+                result2 = bis.read();
+            }
+            result = buf.toString();
+            System.out.println(result);
 
             if (conn.getResponseCode() != 200) {
                 throw new RuntimeException("Failed : HTTP error code : "
                         + conn.getResponseCode());
+            } else {
+                System.out.println("Response code = "+ conn.getResponseCode());
+                System.out.println("Response code = "+ conn.getResponseMessage());
             }
 
             BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
@@ -100,11 +139,17 @@ public class ConfirmAccountNumberIntentHandler implements RequestHandler {
             }
             conn.disconnect();
         } catch (MalformedURLException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         return balance;
+    }
+
+    public static String generateRqUID() {
+        Date dt = new Date();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHHmmssSSS");
+        return sdf.format(dt) + (int) (Math.random()*100000);
     }
 
 }
